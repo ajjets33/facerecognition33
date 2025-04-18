@@ -1,7 +1,7 @@
 import streamlit as st
+import face_recognition
 import numpy as np
-from PIL import Image
-import mediapipe as mp
+from PIL import Image, ImageDraw
 import tempfile
 import os
 
@@ -12,31 +12,26 @@ st.set_page_config(
     layout="wide"
 )
 
-# Initialize MediaPipe Face Detection
-mp_face_detection = mp.solutions.face_detection
-mp_drawing = mp.solutions.drawing_utils
-
-def process_image(image, min_detection_confidence=0.5):
-    """Process image using MediaPipe Face Detection"""
-    with mp_face_detection.FaceDetection(
-        model_selection=1, min_detection_confidence=min_detection_confidence
-    ) as face_detection:
-        # Convert PIL Image to numpy array if necessary
-        if isinstance(image, Image.Image):
-            image = np.array(image)
+def process_image(image):
+    """Process image using face_recognition"""
+    # Convert PIL Image to numpy array if necessary
+    if isinstance(image, Image.Image):
+        image_array = np.array(image)
+    else:
+        image_array = image
         
-        # Convert to RGB
-        image_rgb = image.copy()
-        
-        # Process the image and detect faces
-        results = face_detection.process(image_rgb)
-        
-        # Draw face detections
-        if results.detections:
-            for detection in results.detections:
-                mp_drawing.draw_detection(image_rgb, detection)
-        
-        return image_rgb, results.detections if results.detections else []
+    # Find all face locations in the image
+    face_locations = face_recognition.face_locations(image_array)
+    
+    # Draw boxes around faces
+    pil_image = Image.fromarray(image_array)
+    draw = ImageDraw.Draw(pil_image)
+    
+    for (top, right, bottom, left) in face_locations:
+        # Draw box
+        draw.rectangle(((left, top), (right, bottom)), outline="lime", width=2)
+    
+    return np.array(pil_image), face_locations
 
 def main():
     st.title("Face Detection App")
@@ -65,10 +60,7 @@ def main():
             
             # Process image
             with st.spinner("Detecting faces..."):
-                result_image, detections = process_image(
-                    image, 
-                    min_detection_confidence
-                )
+                result_image, face_locations = process_image(image)
                 
                 # Display results
                 col1, col2 = st.columns(2)
@@ -82,7 +74,7 @@ def main():
                 
                 # Display detection info
                 st.subheader("Detection Results")
-                st.write(f"Found {len(detections)} faces")
+                st.write(f"Found {len(face_locations)} faces")
     
     else:  # Camera
         st.info("Note: Camera capture will process frames in real-time")
@@ -96,17 +88,14 @@ def main():
             
             # Process image
             with st.spinner("Detecting faces..."):
-                result_image, detections = process_image(
-                    image,
-                    min_detection_confidence
-                )
+                result_image, face_locations = process_image(image)
                 
                 # Display results
                 st.subheader("Detected Faces")
                 st.image(result_image, use_column_width=True)
                 
                 # Display detection info
-                st.write(f"Found {len(detections)} faces")
+                st.write(f"Found {len(face_locations)} faces")
 
 if __name__ == "__main__":
     main()
